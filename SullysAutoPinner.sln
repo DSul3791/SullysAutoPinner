@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35931.197 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SullysAutoPinner", "SullysAutoPinner\SullysAutoPinner.csproj", "{53EB7460-CF9B-4412-B6F9-0C7191329F58}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{53EB7460-CF9B-4412-B6F9-0C7191329F58}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{53EB7460-CF9B-4412-B6F9-0C7191329F58}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{53EB7460-CF9B-4412-B6F9-0C7191329F58}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{53EB7460-CF9B-4412-B6F9-0C7191329F58}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {13A6E9DE-A557-40BB-8E26-A4E03B737E44}
+	EndGlobalSection
+EndGlobal
