@@ -1,7 +1,7 @@
-﻿// SullysAutoPinner v1.2.3
+﻿// SullysAutoPinner v1.2.4
 // 
-// Updated the Save path to use Bepinex Dynamic path
-// will now work with Mod Managers
+// fixed certain items not deleting when requested
+// 
 
 using System;
 using System.Collections.Generic;
@@ -14,7 +14,7 @@ using BepInEx;
 using HarmonyLib;
 
 
-[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.2.3")]
+[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.2.4")]
 public class SullysAutoPinner : BaseUnityPlugin
 {
     private PinSettings _settings;
