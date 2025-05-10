@@ -1,7 +1,7 @@
-﻿// SullysAutoPinner v1.2.4
+﻿// SullysAutoPinner v1.2.6
 // 
-// fixed certain items not deleting when requested
-// 
+// fixed Pins.txt file location
+// adjusted metals detection.
 
 using System;
 using System.Collections.Generic;
@@ -14,7 +14,7 @@ using BepInEx;
 using HarmonyLib;
 
 
-[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.2.4")]
+[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.2.6")]
 public class SullysAutoPinner : BaseUnityPlugin
 {
     private PinSettings _settings;
@@ -306,7 +306,10 @@ public class PinManager
     private readonly PinSettings _settings;
     private readonly BepInEx.Logging.ManualLogSource _logger;
     private float _lastSaveTime;
-    private const string PinsFilePath = "BepInEx/config/SullysAutoPinnerFiles/Pins.txt";
+
+    private static readonly string SaveFolder = Path.Combine(Paths.ConfigPath, "SullysAutoPinnerFiles");
+    private static readonly string PinsFilePath = Path.Combine(SaveFolder, "Pins.txt");
+
 
     public PinManager(PinSettings settings, BepInEx.Logging.ManualLogSource logger)
     {
@@ -697,12 +700,12 @@ public class PinScanner
     private bool TryMatchPrefab(string name, out string label)
     {
         label = null;
-        if (name.Contains("minerock_copper") && _settings.Copper) label = "COPPER";
-        else if (name.Contains("minerock_iron") && _settings.Iron) label = "IRON";
-        else if (name.Contains("minerock_meteorite") && _settings.Meteorite) label = "METEOR";
-        else if (name.Contains("minerock_obsidian") && _settings.Obsidian) label = "OBS";
+        if (name.Contains("copper") && _settings.Copper) label = "COPPER";
+        else if (name.Contains("iron") && _settings.Iron) label = "IRON";
+        else if (name.Contains("meteorite") && _settings.Meteorite) label = "METEOR";
+        else if (name.Contains("obsidian") && _settings.Obsidian) label = "OBS";
         else if (name.Contains("silvervein") && _settings.Silver) label = "SILVER";
-        else if (name.Contains("minerock_tin") && _settings.Tin) label = "TIN";
+        else if (name.Contains("tin") && _settings.Tin) label = "TIN";
         else if (name.Contains("spawner_skeleton") && _settings.Skeleton) label = "SKEL";
         else if (name.Contains("pickable_magecap") && _settings.MageCaps) label = "MAGECAP";
         else if (name.Contains("pickable_tar") && _settings.Tar) label = "TAR";
