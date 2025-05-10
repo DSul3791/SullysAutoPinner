@@ -1,7 +1,7 @@
-﻿// SullysAutoPinner v1.2.6
+﻿// SullysAutoPinner v1.2.7
 // 
-// fixed Pins.txt file location
-// adjusted metals detection.
+// added Mudpile detection
+// 
 
 using System;
 using System.Collections.Generic;
@@ -14,7 +14,7 @@ using BepInEx;
 using HarmonyLib;
 
 
-[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.2.6")]
+[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.2.7")]
 public class SullysAutoPinner : BaseUnityPlugin
 {
     private PinSettings _settings;
@@ -61,7 +61,7 @@ public class SullysAutoPinner : BaseUnityPlugin
 
 
 
-        Logger.LogWarning("SullysAutoPinner v1.2.2 Initialized");
+        Logger.LogWarning("SullysAutoPinner Initialized");
     }
 
 
@@ -701,7 +701,7 @@ public class PinScanner
     {
         label = null;
         if (name.Contains("copper") && _settings.Copper) label = "COPPER";
-        else if (name.Contains("iron") && _settings.Iron) label = "IRON";
+        else if (name.Contains("mudpile") && _settings.Iron) label = "IRON";
         else if (name.Contains("meteorite") && _settings.Meteorite) label = "METEOR";
         else if (name.Contains("obsidian") && _settings.Obsidian) label = "OBS";
         else if (name.Contains("silvervein") && _settings.Silver) label = "SILVER";
