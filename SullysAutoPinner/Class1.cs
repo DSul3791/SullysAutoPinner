@@ -421,6 +421,8 @@ public class PinManager
     {
         switch (label)
         {
+            case "CRYPT": return settings.Crypt;
+            case "TROLLCAVE": return settings.TrollCave;
             case "COPPER": return settings.Copper;
             case "IRON": return settings.Iron;
             case "TIN": return settings.Tin;
@@ -443,7 +445,7 @@ public class PinManager
             case "DRAGONEGG": return settings.DragonEgg;
             case "SMOKEPUFF": return settings.SmokePuffs;
             case "THING": return settings.DvergerThings;
-            case "DwarfSpawner": return settings.DwarfSpawner;
+            case "DWARFSPAWNER": return settings.DwarfSpawner;
             case "DRAUGRSPAWNER": return settings.DraugrSpawner;
             case "TOTEM": return settings.Totem;
             case "SKEL": return settings.Skeleton;
