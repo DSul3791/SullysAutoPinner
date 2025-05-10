@@ -1,6 +1,6 @@
-﻿// SullysAutoPinner v1.2.4
+﻿// SullysAutoPinner v1.2.5
 // 
-// fixed certain items not deleting when requested
+// Fixed Copper detection not working
 // 
 
 using System;
@@ -698,6 +698,7 @@ public class PinScanner
     {
         label = null;
         if (name.Contains("minerock_copper") && _settings.Copper) label = "COPPER";
+        else if (name.Contains("copper") && _settings.Iron) label = "COPPER";
         else if (name.Contains("minerock_iron") && _settings.Iron) label = "IRON";
         else if (name.Contains("minerock_meteorite") && _settings.Meteorite) label = "METEOR";
         else if (name.Contains("minerock_obsidian") && _settings.Obsidian) label = "OBS";
