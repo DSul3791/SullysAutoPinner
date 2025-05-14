@@ -12,6 +12,7 @@ using System.Threading;
 using UnityEngine;
 using BepInEx;
 using HarmonyLib;
+using static PinScanner;
 
 
 [BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.2.7")]
@@ -301,15 +302,20 @@ public class PinSettings
 public class PinManager
 {
     private const int PinFlushThreshold = 250;
-    private readonly List<Tuple<Vector3, string>> _pinQueue = new List<Tuple<Vector3, string>>();
+    
     private readonly HashSet<string> _pinHashes = new HashSet<string>();
     private readonly PinSettings _settings;
     private readonly BepInEx.Logging.ManualLogSource _logger;
+    private readonly List<Tuple<Vector3, string>> _currentPins = new List<Tuple<Vector3, string>>();
+    private readonly List<Tuple<Vector3, string>> _newPins = new List<Tuple<Vector3, string>>();
+
+
     private float _lastSaveTime;
 
     private static readonly string SaveFolder = Path.Combine(Paths.ConfigPath, "SullysAutoPinnerFiles");
     private static readonly string PinsFilePath = Path.Combine(SaveFolder, "Pins.txt");
 
+ 
 
     public PinManager(PinSettings settings, BepInEx.Logging.ManualLogSource logger)
     {
@@ -324,40 +330,45 @@ public class PinManager
         if (Minimap.instance == null) return;
 
         Vector3 roundedPos = RoundTo0_1(pos);
-        string hash = GetPinHash(roundedPos, label);
+        string labelUpper = label.ToUpperInvariant();
+        string hash = GetPinHash(roundedPos, labelUpper);
 
         if (_pinHashes.Contains(hash)) return;
 
-        foreach (var existing in _pinQueue)
+        foreach (var existing in _currentPins)
         {
             if (Vector3.Distance(existing.Item1, roundedPos) < _settings.PinMergeDistance &&
-                string.Equals(existing.Item2, label, StringComparison.OrdinalIgnoreCase))
+                string.Equals(existing.Item2, labelUpper, StringComparison.OrdinalIgnoreCase))
                 return;
         }
 
-        Minimap.instance.AddPin(roundedPos, Minimap.PinType.Icon3, label, true, false);
-        
-        _pinQueue.Add(new Tuple<Vector3, string>(roundedPos, label));
+        Minimap.instance.AddPin(roundedPos, Minimap.PinType.Icon3, labelUpper, true, false);
+
+        _newPins.Add(new Tuple<Vector3, string>(roundedPos, labelUpper));
+        _currentPins.Add(new Tuple<Vector3, string>(roundedPos, labelUpper));
         _pinHashes.Add(hash);
 
-        if (_settings.EnablePinSaving && _pinQueue.Count >= PinFlushThreshold)
+        if (_settings.EnablePinSaving && _newPins.Count >= PinFlushThreshold)
         {
             SavePinsToFile();
         }
     }
+
 
     public void TryPeriodicSave()
     {
-        if (!_settings.EnablePinSaving || _pinQueue.Count == 0) return;
-        if (Time.time - _lastSaveTime > _settings.SaveInterval)
+        if (!_settings.EnablePinSaving || _newPins.Count == 0) return;
+
+        if (_newPins.Count >= PinFlushThreshold || Time.time - _lastSaveTime > _settings.SaveInterval)
         {
             SavePinsToFile();
         }
     }
 
+
     public void SaveImmediate()
     {
-        if (_settings.EnablePinSaving && _pinQueue.Count > 0)
+        if (_settings.EnablePinSaving)
         {
             SavePinsToFile();
         }
@@ -367,7 +378,7 @@ public class PinManager
     {
         if (Minimap.instance == null) return;
         _pinHashes.Clear();
-        _pinQueue.Clear();
+        
 
         try
         {
@@ -422,42 +433,16 @@ public class PinManager
 
     private bool IsLabelEnabled(string label, PinSettings settings)
     {
-        switch (label)
-        {
-            case "CRYPT": return settings.Crypt;
-            case "TROLLCAVE": return settings.TrollCave;
-            case "COPPER": return settings.Copper;
-            case "IRON": return settings.Iron;
-            case "TIN": return settings.Tin;
-            case "OBSIDIAN": return settings.Obsidian;
-            case "SILVER": return settings.Silver;
-            case "METEOR": return settings.Meteorite;
-            case "TAR": return settings.Tar;
-            case "FLAX": return settings.Flax;
-            case "BARLEY": return settings.Barley;
-            case "BLUE": return settings.BlueBerries;
-            case "BERRIES": return settings.RaspBerries;
-            case "SHROOMS": return settings.Mushrooms;
-            case "CLOUD": return settings.CloudBerries;
-            case "THISTLE": return settings.Thistle;
-            case "CARROT": case "ONION": case "TURNIP": return settings.Seeds;
-            case "MAGECAP": return settings.MageCaps;
-            case "Y-PCONE": return settings.YPCones;
-            case "J-PUFF": return settings.JotunnPuffs;
-            case "V-EGG": return settings.VoltureEgg;
-            case "DRAGONEGG": return settings.DragonEgg;
-            case "SMOKEPUFF": return settings.SmokePuffs;
-            case "THING": return settings.DvergerThings;
-            case "DWARFSPAWNER": return settings.DwarfSpawner;
-            case "DRAUGRSPAWNER": return settings.DraugrSpawner;
-            case "TOTEM": return settings.Totem;
-            case "SKEL": return settings.Skeleton;
-            case "BOX": return settings.Treasure;
-            case "SWORDS": return settings.MistlandsSwords;
-            case "GIANT": return settings.MistlandsGiants;
-            default: return true;
-        }
+        if (!PinLabelMap.LabelToSettingInfo.TryGetValue(label, out var settingInfo))
+            return true; // default to true for unknown labels
+
+        var field = typeof(PinSettings).GetField(settingInfo.SettingKey);
+        if (field == null || field.FieldType != typeof(bool))
+            return true;
+
+        return (bool)field.GetValue(settings);
     }
+
 
     private void SavePinsToFile()
     {
@@ -465,7 +450,7 @@ public class PinManager
         {
             using (StreamWriter writer = File.AppendText(PinsFilePath))
             {
-                foreach (var pin in _pinQueue)
+                foreach (var pin in _newPins)
                 {
                     writer.WriteLine(string.Format(CultureInfo.InvariantCulture, "{0:F1}|{1:F1}|{2:F1}|{3}",
                         pin.Item1.x, pin.Item1.y, pin.Item1.z, pin.Item2));
@@ -477,9 +462,10 @@ public class PinManager
             _logger.LogWarning("SullyAutoPinner >>> Error saving pins: " + ex.Message);
         }
 
-        _pinQueue.Clear();
+        _newPins.Clear(); // Only clear unsaved pins
         _lastSaveTime = Time.time;
     }
+
 
     private void LoadPinsFromFile()
     {
@@ -496,11 +482,13 @@ public class PinManager
                 if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out float x)) continue;
                 if (!float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float y)) continue;
                 if (!float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float z)) continue;
-                string label = parts[3];
+                string label = parts[3].Trim().ToUpperInvariant();
 
-                Vector3 pos = new Vector3(x, y, z);
+                Vector3 pos = RoundTo0_1(new Vector3(x, y, z));
                 string hash = GetPinHash(pos, label);
+
                 _pinHashes.Add(hash);
+                _currentPins.Add(new Tuple<Vector3, string>(pos, label));
             }
         }
         catch (Exception ex)
@@ -508,6 +496,7 @@ public class PinManager
             _logger.LogWarning("SullyAutoPinner >>> Error loading pins: " + ex.Message);
         }
     }
+
 
     private string GetPinHash(Vector3 pos, string label)
     {
@@ -632,9 +621,12 @@ public class PinScanner
         _prefabTracker = prefabTracker;
     }
 
+
     public void RunScan(Vector3 playerPosition)
     {
         Collider[] hits = Physics.OverlapSphere(playerPosition, _settings.ScanRadius, ~0, QueryTriggerInteraction.Collide);
+
+        var trollCavesThisScan = new List<Vector3>();
 
         foreach (var hit in hits)
         {
@@ -642,51 +634,41 @@ public class PinScanner
             if (root == null) continue;
 
             _prefabTracker.LogPrefabHierarchy(root);
+            string rootName = root.name.ToLowerInvariant();
+            Vector3 pinPos = root.transform.position;
 
-            string name = root.name.ToLowerInvariant();
-            if (name.Contains("locationproxy"))
+            if (rootName.Contains("locationproxy"))
             {
-                HandleLocationProxyChildren(root);
-            }
-            else if (TryMatchPrefab(name, out string label))
-            {
-                _pinManager.TryAddPin(root.transform.position, label);
-            }
-        }
-    }
-
-    private void HandleLocationProxyChildren(GameObject root)
-    {
-        string[] patterns = { "trollcave", "crypt" };
-
-        foreach (Transform child in root.transform)
-        {
-            string childName = child.name.ToLowerInvariant();
-            if (childName.Contains("runestone")) continue;
-
-            foreach (string pattern in patterns)
-            {
-                if (childName.Contains(pattern))
+                foreach (Transform child in root.transform)
                 {
-                    string label = CleanLabel(child.name);
-                    _pinManager.TryAddPin(root.transform.position, label);
-                    return;
+                    string childName = child.name.ToLowerInvariant();
+                    if (childName.Contains("runestone")) continue;
+
+                    if (TryMatchPrefab(childName, out string label))
+                    {
+                        if (label == "TROLLCAVE") trollCavesThisScan.Add(pinPos);
+                        if (label == "CRYPT" && trollCavesThisScan.Any(tc => Vector3.Distance(tc, pinPos) < 30f))
+                            continue; //  skip CRYPTs near troll caves
+
+                        _pinManager.TryAddPin(pinPos, label);
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                if (TryMatchPrefab(rootName, out string label))
+                {
+                    if (label == "TROLLCAVE") trollCavesThisScan.Add(pinPos);
+                    if (label == "CRYPT" && trollCavesThisScan.Any(tc => Vector3.Distance(tc, pinPos) < 30f))
+                        continue; // skip CRYPTs near troll caves
+
+                    _pinManager.TryAddPin(pinPos, label);
                 }
             }
         }
-
-        // Fallback: use first non-runestone child
-        foreach (Transform child in root.transform)
-        {
-            string childName = child.name.ToLowerInvariant();
-            if (!childName.Contains("runestone"))
-            {
-                string label = CleanLabel(child.name);
-                _pinManager.TryAddPin(root.transform.position, label);
-                return;
-            }
-        }
     }
+
 
     private string CleanLabel(string rawName)
     {
@@ -696,41 +678,73 @@ public class PinScanner
     }
 
 
-
-    private bool TryMatchPrefab(string name, out string label)
+    private bool TryMatchPrefab(string prefabName, out string matchedLabel)
     {
-        label = null;
-        if (name.Contains("copper") && _settings.Copper) label = "COPPER";
-        else if (name.Contains("mudpile") && _settings.Iron) label = "IRON";
-        else if (name.Contains("meteorite") && _settings.Meteorite) label = "METEOR";
-        else if (name.Contains("obsidian") && _settings.Obsidian) label = "OBS";
-        else if (name.Contains("silvervein") && _settings.Silver) label = "SILVER";
-        else if (name.Contains("tin") && _settings.Tin) label = "TIN";
-        else if (name.Contains("spawner_skeleton") && _settings.Skeleton) label = "SKEL";
-        else if (name.Contains("pickable_magecap") && _settings.MageCaps) label = "MAGECAP";
-        else if (name.Contains("pickable_tar") && _settings.Tar) label = "TAR";
-        else if (name.Contains("pickable_flax") && _settings.Flax) label = "FLAX";
-        else if (name.Contains("pickable_barley") && _settings.Barley) label = "BARLEY";
-        else if (name.Contains("pickable_thistle") && _settings.Thistle) label = "THISTLE";
-        else if (name.Contains("pickable_dvergerthing") && _settings.DvergerThings) label = "THING";
-        else if (name.Contains("mistlands_giant") && _settings.MistlandsGiants) label = "GIANT";
-        else if (name.Contains("mistlands_swords") && _settings.MistlandsSwords) label = "SWORDS";
-        else if (name.Contains("pickable_dragonegg") && _settings.DragonEgg) label = "DRAGONEGG";
-        else if (name.Contains("pickable_voltureegg") && _settings.VoltureEgg) label = "V-EGG";
-        else if (name.Contains("pickable_smokepuff") && _settings.SmokePuffs) label = "SMOKEPUFF";
-        else if (name.Contains("pickable_yggdrasilpinecone") && _settings.YPCones) label = "Y-PCONE";
-        else if (name.Contains("pickable_jotunnpuff") && _settings.JotunnPuffs) label = "J-PUFF";
-        else if (name.Contains("rasp") && _settings.RaspBerries) label = "BERRIES";
-        else if (name.Contains("blue") && _settings.BlueBerries) label = "BLUE";
-        else if (name.Contains("mushroom") && _settings.Mushrooms) label = "SHROOMS";
-        else if (name.Contains("cloud") && _settings.CloudBerries) label = "CLOUD";
-        else if (name.Contains("pickable_seedcarrot") && _settings.Seeds) label = "CARROT";
-        else if (name.Contains("pickable_seedonion") && _settings.Seeds) label = "ONION";
-        else if (name.Contains("pickable_seedturnip") && _settings.Seeds) label = "TURNIP";
-        else if (name.Contains("treasurechest") && _settings.Treasure) label = "BOX";
-        else if (name.Contains("spawner_draugrpile") && _settings.DraugrSpawner) label = "DRAUGRSPAWNER";
-        else if (name.Contains("spawner_greydwarfnest") && _settings.DwarfSpawner) label = "DwarfSpawner";
-        else if (name.Contains("goblin_totempole") && _settings.Totem) label = "TOTEM";
-        return label != null;
+        matchedLabel = null;
+
+        foreach (var kvp in PinLabelMap.LabelToSettingInfo)
+        {
+            string matchToken = kvp.Key.ToLowerInvariant(); // the label is also used as the match token
+            string settingKey = kvp.Value.SettingKey;
+
+            if (!prefabName.Contains(matchToken)) continue;
+
+            var field = typeof(PinSettings).GetField(settingKey);
+            if (field == null || field.FieldType != typeof(bool)) continue;
+
+            if ((bool)field.GetValue(_settings))
+            {
+                matchedLabel = kvp.Key;
+                return true;
+            }
+        }
+
+        return false;
     }
+
+
+    public static class PinLabelMap
+    {
+        public static readonly Dictionary<string, (string SettingKey, Minimap.PinType Icon)> LabelToSettingInfo =
+    new Dictionary<string, (string SettingKey, Minimap.PinType Icon)>(StringComparer.OrdinalIgnoreCase)
+    {
+        { "CRYPT", ("Crypt2", Minimap.PinType.Icon3) },
+        { "CRYPT", ("Crypt3", Minimap.PinType.Icon3) },
+        { "CRYPT", ("Crypt4", Minimap.PinType.Icon3) },
+        { "TROLLCAVE", ("TrollCave", Minimap.PinType.Icon3) },
+        { "COPPER", ("Copper", Minimap.PinType.Icon4) },
+        { "IRON", ("Iron", Minimap.PinType.Icon3) },
+        { "TIN", ("Tin", Minimap.PinType.Icon3) },
+        { "OBS", ("Obsidian", Minimap.PinType.Icon3) },
+        { "SILVER", ("Silver", Minimap.PinType.Icon3) },
+        { "METEOR", ("Meteorite", Minimap.PinType.Icon3) },
+        { "TAR", ("Tar", Minimap.PinType.Icon3) },
+        { "FLAX", ("Flax", Minimap.PinType.Icon3) },
+        { "BARLEY", ("Barley", Minimap.PinType.Icon3) },
+        { "BLUE", ("BlueBerries", Minimap.PinType.Icon3) },
+        { "BERRIES", ("RaspBerries", Minimap.PinType.Icon3) },
+        { "SHROOMS", ("Mushrooms", Minimap.PinType.Icon3) },
+        { "CLOUD", ("CloudBerries", Minimap.PinType.Icon3) },
+        { "THISTLE", ("Thistle", Minimap.PinType.Icon3) },
+        { "CARROT", ("Seeds", Minimap.PinType.Icon3) },
+        { "ONION", ("Seeds", Minimap.PinType.Icon3) },
+        { "TURNIP", ("Seeds", Minimap.PinType.Icon3) },
+        { "MAGECAP", ("MageCaps", Minimap.PinType.Icon3) },
+        { "Y-PCONE", ("YPCones", Minimap.PinType.Icon3) },
+        { "J-PUFF", ("JotunnPuffs", Minimap.PinType.Icon3) },
+        { "V-EGG", ("VoltureEgg", Minimap.PinType.Icon3) },
+        { "DRAGONEGG", ("DragonEgg", Minimap.PinType.Icon3) },
+        { "SMOKEPUFF", ("SmokePuffs", Minimap.PinType.Icon3) },
+        { "THING", ("DvergerThings", Minimap.PinType.Icon3) },
+        { "DWARFSPAWNER", ("DwarfSpawner", Minimap.PinType.Icon3) },
+        { "DRAUGRSPAWNER", ("DraugrSpawner", Minimap.PinType.Icon3) },
+        { "TOTEM", ("Totem", Minimap.PinType.Icon3) },
+        { "SKEL", ("Skeleton", Minimap.PinType.Icon3) },
+        { "BOX", ("Treasure", Minimap.PinType.Icon3) },
+        { "SWORDS", ("MistlandsSwords", Minimap.PinType.Icon3) },
+        { "MARKER", ("Marker", Minimap.PinType.Icon2) },
+        { "GIANT", ("MistlandsGiants", Minimap.PinType.Icon3) }
+    };
+    }
+
 }
