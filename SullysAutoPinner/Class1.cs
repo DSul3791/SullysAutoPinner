@@ -15,7 +15,7 @@ using HarmonyLib;
 using static PinScanner;
 
 
-[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.2.7")]
+[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.2.8")]
 public class SullysAutoPinner : BaseUnityPlugin
 {
     private PinSettings _settings;
@@ -257,6 +257,8 @@ public class ConfigLoader
 
 public class PinSettings
 {
+    public bool ClearNearbyFallbackPinsOnNextScan = false;
+    public bool ShowUnmappedPrefabs = false;
     public float ScanRadius = 300f;
     public float ScanInterval = 12f;
     public float SaveInterval = 120f;
@@ -276,6 +278,7 @@ public class PinSettings
     public bool TrollCave = true;
     public bool Crypt = true;
     public bool Totem = true;
+    public bool Fire = true;
     public bool DraugrSpawner = false;
     public bool Treasure = false;
     public bool Barley = false;
@@ -288,6 +291,8 @@ public class PinSettings
     public bool YPCones = true;
     public bool JotunnPuffs = false;
     public bool Iron = true;
+    public bool Mudpile = true;
+    public bool Abomination = true;
     public bool Meteorite = true;
     public bool Obsidian = true;
     public bool Silver = true;
@@ -301,7 +306,7 @@ public class PinSettings
 // --- PinManager ---
 public class PinManager
 {
-    private const int PinFlushThreshold = 250;
+    private const int PinFlushThreshold = 50;
     
     private readonly HashSet<string> _pinHashes = new HashSet<string>();
     private readonly PinSettings _settings;
@@ -315,7 +320,35 @@ public class PinManager
     private static readonly string SaveFolder = Path.Combine(Paths.ConfigPath, "SullysAutoPinnerFiles");
     private static readonly string PinsFilePath = Path.Combine(SaveFolder, "Pins.txt");
 
- 
+
+    public void RemoveNearbyFallbackPins(Vector3 center, float radius)
+    {
+        if (Minimap.instance == null) return;
+
+        var allPins = AccessTools.Field(typeof(Minimap), "m_pins").GetValue(Minimap.instance) as List<Minimap.PinData>;
+        if (allPins == null) return;
+
+        var toRemove = new List<Minimap.PinData>();
+
+        foreach (var pin in allPins)
+        {
+            if (Vector3.Distance(center, pin.m_pos) > radius)
+                continue;
+
+            string label = pin.m_name;
+            if (!PinLabelMap.LabelToSettingInfo.ContainsKey(label))  // not mapped = fallback
+            {
+                toRemove.Add(pin);
+            }
+        }
+
+        foreach (var pin in toRemove)
+        {
+            Minimap.instance.RemovePin(pin);
+        }
+
+        _logger.LogWarning($"Removed {toRemove.Count} fallback pins within {radius}m.");
+    }
 
     public PinManager(PinSettings settings, BepInEx.Logging.ManualLogSource logger)
     {
@@ -325,7 +358,7 @@ public class PinManager
         LoadPinsFromFile();
     }
 
-    public void TryAddPin(Vector3 pos, string label)
+    public void TryAddPin(Vector3 pos, string label, Minimap.PinType icon)
     {
         if (Minimap.instance == null) return;
 
@@ -342,7 +375,7 @@ public class PinManager
                 return;
         }
 
-        Minimap.instance.AddPin(roundedPos, Minimap.PinType.Icon3, labelUpper, true, false);
+        Minimap.instance.AddPin(roundedPos, icon, labelUpper, true, false);
 
         _newPins.Add(new Tuple<Vector3, string>(roundedPos, labelUpper));
         _currentPins.Add(new Tuple<Vector3, string>(roundedPos, labelUpper));
@@ -398,6 +431,10 @@ public class PinManager
         {
             Minimap.instance.RemovePin(pin);
         }
+
+        _currentPins.Clear();
+        _newPins.Clear();
+        _pinHashes.Clear();
 
         _logger.LogWarning($"SullysAutoPinner >>> All Map Pins Removed {allPins.Count} pins from the map.");
     }
@@ -620,13 +657,23 @@ public class PinScanner
         _pinManager = pinManager;
         _prefabTracker = prefabTracker;
     }
-
-
     public void RunScan(Vector3 playerPosition)
     {
+        //Clear all fallback Pins
+        if (_settings.ClearNearbyFallbackPinsOnNextScan)
+        {
+            _pinManager.RemoveNearbyFallbackPins(playerPosition, _settings.ScanRadius);
+            _settings.ClearNearbyFallbackPinsOnNextScan = false;
+            new ConfigLoader(BepInEx.Logging.Logger.CreateLogSource("AutoPinner")).SaveDefault(_settings);
+        }
+        if (playerPosition.y > 1000f)
+        {
+            return; // Inside dungeon or crypt instance — skip scan
+        }
         Collider[] hits = Physics.OverlapSphere(playerPosition, _settings.ScanRadius, ~0, QueryTriggerInteraction.Collide);
 
         var trollCavesThisScan = new List<Vector3>();
+        var deferredProxies = new List<(Vector3, Transform)>(); // stores (pinPos, rootTransform)
 
         foreach (var hit in hits)
         {
@@ -639,31 +686,57 @@ public class PinScanner
 
             if (rootName.Contains("locationproxy"))
             {
-                foreach (Transform child in root.transform)
+                deferredProxies.Add((pinPos, root.transform));
+                continue;
+            }
+
+            if (TryMatchPrefab(rootName, out string label, out Minimap.PinType icon))
+            {
+                if (label == "TROLLCAVE") trollCavesThisScan.Add(pinPos);
+                if (label == "CRYPT" && trollCavesThisScan.Any(tc => Vector3.Distance(tc, pinPos) < 40f))
+                    continue;
+
+                _pinManager.TryAddPin(pinPos, label, icon);
+            }
+        }
+
+        // --- First pass: find troll caves ---
+        foreach (var (pinPos, transform) in deferredProxies)
+        {
+            foreach (Transform child in transform)
+            {
+                string childName = child.name.ToLowerInvariant();
+                if (childName.Contains("runestone")) continue;
+
+                if (TryMatchPrefab(childName, out string label, out Minimap.PinType icon))
                 {
-                    string childName = child.name.ToLowerInvariant();
-                    if (childName.Contains("runestone")) continue;
-
-                    if (TryMatchPrefab(childName, out string label))
+                    if (label == "TROLLCAVE")
                     {
-                        if (label == "TROLLCAVE") trollCavesThisScan.Add(pinPos);
-                        if (label == "CRYPT" && trollCavesThisScan.Any(tc => Vector3.Distance(tc, pinPos) < 30f))
-                            continue; //  skip CRYPTs near troll caves
-
-                        _pinManager.TryAddPin(pinPos, label);
-                        break;
+                        trollCavesThisScan.Add(pinPos);
+                        _pinManager.TryAddPin(pinPos, label, icon);
                     }
+                    break;
                 }
             }
-            else
-            {
-                if (TryMatchPrefab(rootName, out string label))
-                {
-                    if (label == "TROLLCAVE") trollCavesThisScan.Add(pinPos);
-                    if (label == "CRYPT" && trollCavesThisScan.Any(tc => Vector3.Distance(tc, pinPos) < 30f))
-                        continue; // skip CRYPTs near troll caves
+        }
 
-                    _pinManager.TryAddPin(pinPos, label);
+        // --- Second pass: handle everything else, suppressing crypts near troll caves ---
+        foreach (var (pinPos, transform) in deferredProxies)
+        {
+            foreach (Transform child in transform)
+            {
+                string childName = child.name.ToLowerInvariant();
+                if (childName.Contains("runestone")) continue;
+
+                if (TryMatchPrefab(childName, out string label, out Minimap.PinType icon))
+                {
+                    if (label == "TROLLCAVE") break; // Already handled
+
+                    if (label == "CRYPT" && trollCavesThisScan.Any(tc => Vector3.Distance(tc, pinPos) < 40f))
+                        break;
+
+                    _pinManager.TryAddPin(pinPos, label, icon);
+                    break;
                 }
             }
         }
@@ -678,73 +751,110 @@ public class PinScanner
     }
 
 
-    private bool TryMatchPrefab(string prefabName, out string matchedLabel)
+    private bool TryMatchPrefab(string prefabName, out string matchedLabel, out Minimap.PinType icon)
     {
         matchedLabel = null;
+        icon = Minimap.PinType.Icon3;
 
         foreach (var kvp in PinLabelMap.LabelToSettingInfo)
         {
-            string matchToken = kvp.Key.ToLowerInvariant(); // the label is also used as the match token
+            if (prefabName.IndexOf(kvp.Key, StringComparison.OrdinalIgnoreCase) < 0)
+                continue;
+
             string settingKey = kvp.Value.SettingKey;
 
-            if (!prefabName.Contains(matchToken)) continue;
-
             var field = typeof(PinSettings).GetField(settingKey);
-            if (field == null || field.FieldType != typeof(bool)) continue;
+            if (field == null || field.FieldType != typeof(bool))
+                continue;
 
             if ((bool)field.GetValue(_settings))
             {
-                matchedLabel = kvp.Key;
+                matchedLabel = settingKey.ToUpperInvariant(); // Label from setting, not prefab
+                icon = kvp.Value.Icon;
                 return true;
             }
+        }
+
+        // ❗ If no match found but ShowUnmappedPrefabs is enabled, return prefab name as label
+        if (_settings.ShowUnmappedPrefabs)
+        {
+            string[] fallbackExcludes = new[]
+{
+    "beech", "berry", "birch", "boar", "branch", "bush", "dandelion", "deer", "feathers",
+    "fish", "firtree", "fur", "goblin", "goblin_archer", "goblin_banner", "goblin_bed", "goblin_fence",
+    "goblin_pole", "goblin_roof", "goblin_roof_cap", "goblin_shaman", "goblin_stepladder",
+    "greyling", "greydwarf", "mushroom", "neck", "oak1", "pickable_dolmentreasure",
+    "pickable_forestcryptremains", "pickable_flint", "pickable_stone", "player", "pine",
+    "piece_sharpstakes", "piece_workbench", "berries", "resin", "rock", "seagal", "shrub", "stone", "stone_wall", "stubbe",
+    "vines", "wood", "zone", "pillar", "carrot", "turnip", "onion", "thistle", "minerock_tin",
+    "crow", "odin", "pickable_tar", "tarliquid", "skeleton", "deathsquito", "forestcrypt", 
+    "swamptree", "wraith", "statue", "leech", "table", "draugr", "blob", "oak", "leather", 
+    "log", "meat", "seed", "bonefragments", "honey", "forge", "entrails", "mudpile", "bonepile", "abomination",
+    "castlekit", "trophy", "sunken", "root", "guck", "swamp", "grave", "piece"
+};
+
+
+            foreach (var exclude in fallbackExcludes)
+            {
+                if (prefabName.IndexOf(exclude, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return false; // Skip fallback pin
+            }
+
+            matchedLabel = prefabName.Replace("(clone)", ""); // raw prefab name, no formatting
+            icon = Minimap.PinType.Icon2;
+            return true;
         }
 
         return false;
     }
 
 
+
     public static class PinLabelMap
     {
         public static readonly Dictionary<string, (string SettingKey, Minimap.PinType Icon)> LabelToSettingInfo =
-    new Dictionary<string, (string SettingKey, Minimap.PinType Icon)>(StringComparer.OrdinalIgnoreCase)
-    {
-        { "CRYPT", ("Crypt2", Minimap.PinType.Icon3) },
-        { "CRYPT", ("Crypt3", Minimap.PinType.Icon3) },
-        { "CRYPT", ("Crypt4", Minimap.PinType.Icon3) },
-        { "TROLLCAVE", ("TrollCave", Minimap.PinType.Icon3) },
-        { "COPPER", ("Copper", Minimap.PinType.Icon4) },
-        { "IRON", ("Iron", Minimap.PinType.Icon3) },
-        { "TIN", ("Tin", Minimap.PinType.Icon3) },
-        { "OBS", ("Obsidian", Minimap.PinType.Icon3) },
-        { "SILVER", ("Silver", Minimap.PinType.Icon3) },
-        { "METEOR", ("Meteorite", Minimap.PinType.Icon3) },
-        { "TAR", ("Tar", Minimap.PinType.Icon3) },
-        { "FLAX", ("Flax", Minimap.PinType.Icon3) },
-        { "BARLEY", ("Barley", Minimap.PinType.Icon3) },
-        { "BLUE", ("BlueBerries", Minimap.PinType.Icon3) },
-        { "BERRIES", ("RaspBerries", Minimap.PinType.Icon3) },
-        { "SHROOMS", ("Mushrooms", Minimap.PinType.Icon3) },
-        { "CLOUD", ("CloudBerries", Minimap.PinType.Icon3) },
-        { "THISTLE", ("Thistle", Minimap.PinType.Icon3) },
-        { "CARROT", ("Seeds", Minimap.PinType.Icon3) },
-        { "ONION", ("Seeds", Minimap.PinType.Icon3) },
-        { "TURNIP", ("Seeds", Minimap.PinType.Icon3) },
-        { "MAGECAP", ("MageCaps", Minimap.PinType.Icon3) },
-        { "Y-PCONE", ("YPCones", Minimap.PinType.Icon3) },
-        { "J-PUFF", ("JotunnPuffs", Minimap.PinType.Icon3) },
-        { "V-EGG", ("VoltureEgg", Minimap.PinType.Icon3) },
-        { "DRAGONEGG", ("DragonEgg", Minimap.PinType.Icon3) },
-        { "SMOKEPUFF", ("SmokePuffs", Minimap.PinType.Icon3) },
-        { "THING", ("DvergerThings", Minimap.PinType.Icon3) },
-        { "DWARFSPAWNER", ("DwarfSpawner", Minimap.PinType.Icon3) },
-        { "DRAUGRSPAWNER", ("DraugrSpawner", Minimap.PinType.Icon3) },
-        { "TOTEM", ("Totem", Minimap.PinType.Icon3) },
-        { "SKEL", ("Skeleton", Minimap.PinType.Icon3) },
-        { "BOX", ("Treasure", Minimap.PinType.Icon3) },
-        { "SWORDS", ("MistlandsSwords", Minimap.PinType.Icon3) },
-        { "MARKER", ("Marker", Minimap.PinType.Icon2) },
-        { "GIANT", ("MistlandsGiants", Minimap.PinType.Icon3) }
-    };
+    new Dictionary<string, (string, Minimap.PinType)>(StringComparer.OrdinalIgnoreCase)
+
+        {
+        { "abomination", ("Abomination", Minimap.PinType.Icon3) },
+        { "crypt2", ("Crypt", Minimap.PinType.Icon3) },
+        { "crypt3", ("Crypt", Minimap.PinType.Icon3) },
+        { "crypt4", ("Crypt", Minimap.PinType.Icon3) },
+        { "trollcave", ("TrollCave", Minimap.PinType.Icon3) },
+        { "copper_deposit", ("Copper", Minimap.PinType.Icon1) },
+        { "iron_deposit", ("Iron", Minimap.PinType.Icon3) },
+        { "mudpile", ("Mudpile", Minimap.PinType.Icon3) },
+        { "obsidian", ("Obsidian", Minimap.PinType.Icon3) },
+        { "silver", ("Silver", Minimap.PinType.Icon3) },
+        { "meteor", ("Meteorite", Minimap.PinType.Icon3) },
+        { "flax", ("Flax", Minimap.PinType.Icon3) },
+        { "barley", ("Barley", Minimap.PinType.Icon3) },
+        { "blueberry", ("BlueBerries", Minimap.PinType.Icon3) },
+        { "berries", ("RaspBerries", Minimap.PinType.Icon3) },
+        { "shrooms", ("Mushrooms", Minimap.PinType.Icon3) },
+        { "cloud", ("CloudBerries", Minimap.PinType.Icon3) },
+        { "thistle", ("Thistle", Minimap.PinType.Icon3) },
+        { "carrot", ("Seeds", Minimap.PinType.Icon3) },
+        { "onion", ("Seeds", Minimap.PinType.Icon3) },
+        { "turnip", ("Seeds", Minimap.PinType.Icon3) },
+        { "magecap", ("MageCaps", Minimap.PinType.Icon3) },
+        { "y-pcone", ("YPCones", Minimap.PinType.Icon3) },
+        { "j-puff", ("JotunnPuffs", Minimap.PinType.Icon3) },
+        { "v-egg", ("VoltureEgg", Minimap.PinType.Icon3) },
+        { "dragonegg", ("DragonEgg", Minimap.PinType.Icon3) },
+        { "smokepuff", ("SmokePuffs", Minimap.PinType.Icon3) },
+        { "thing", ("DvergerThings", Minimap.PinType.Icon3) },
+        { "dwarfspawner", ("DwarfSpawner", Minimap.PinType.Icon2) },
+        { "draugrspawner", ("DraugrSpawner", Minimap.PinType.Icon2) },
+        { "totem", ("Totem", Minimap.PinType.Icon2) },
+        { "fire", ("Fire", Minimap.PinType.Icon0) },
+        { "tar", ("Tar", Minimap.PinType.Icon2) },
+        { "skel", ("Skeleton", Minimap.PinType.Icon3) },
+        { "treasure", ("Treasure", Minimap.PinType.Icon3) },
+        { "swords", ("MistlandsSwords", Minimap.PinType.Icon3) },
+        { "marker", ("Marker", Minimap.PinType.Icon2) },
+        { "giant", ("MistlandsGiants", Minimap.PinType.Icon3) }
+        };
     }
 
 }
