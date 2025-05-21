@@ -785,11 +785,11 @@ public class PinScanner
     "goblin_pole", "goblin_roof", "goblin_roof_cap", "goblin_shaman", "goblin_stepladder",
     "greyling", "greydwarf", "mushroom", "neck", "oak1", "pickable_dolmentreasure",
     "pickable_forestcryptremains", "pickable_flint", "pickable_stone", "player", "pine",
-    "piece_sharpstakes", "piece_workbench", "berries", "resin", "rock", "seagal", "shrub", "stone", "stone_wall", "stubbe",
+    "piece_sharpstakes", "piece_workbench", "berries", "resin", "seagal", "shrub", "stone", "stone_wall", "stubbe",
     "vines", "wood", "zone", "pillar", "carrot", "turnip", "onion", "thistle", "minerock_tin",
     "crow", "odin", "pickable_tar", "tarliquid", "skeleton", "deathsquito", "forestcrypt", 
     "swamptree", "wraith", "statue", "leech", "table", "draugr", "blob", "oak", "leather", 
-    "log", "meat", "seed", "bonefragments", "honey", "forge", "entrails", "mudpile", "bonepile", "abomination",
+    "log", "meat", "seed", "bonefragments", "honey", "forge", "entrails", "bonepile", 
     "castlekit", "trophy", "sunken", "root", "guck", "swamp", "grave", "piece"
 };
 
@@ -821,7 +821,7 @@ public class PinScanner
         { "crypt3", ("Crypt", Minimap.PinType.Icon3) },
         { "crypt4", ("Crypt", Minimap.PinType.Icon3) },
         { "trollcave", ("TrollCave", Minimap.PinType.Icon3) },
-        { "copper_deposit", ("Copper", Minimap.PinType.Icon1) },
+        { "rock4_copper", ("Copper", Minimap.PinType.Icon3) },
         { "iron_deposit", ("Iron", Minimap.PinType.Icon3) },
         { "mudpile", ("Mudpile", Minimap.PinType.Icon3) },
         { "obsidian", ("Obsidian", Minimap.PinType.Icon3) },
