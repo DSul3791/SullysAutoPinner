@@ -1,6 +1,6 @@
-﻿// SullysAutoPinner v1.2.7
+﻿// SullysAutoPinner v1.3.0
 // 
-// added Mudpile detection
+// added configurable JSON Language Localization
 // 
 
 using System;
@@ -16,7 +16,7 @@ using static PinScanner;
 
 
 
-[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.2.8")]
+[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.3.0")]
 public class SullysAutoPinner : BaseUnityPlugin
 {
     private PinSettings _settings;
