@@ -1,4 +1,4 @@
-﻿// SullysAutoPinner v1.3.0
+﻿// SullysAutoPinner v1.3.1
 // 
 // added configurable JSON Language Localization
 // 
@@ -16,7 +16,7 @@ using static PinScanner;
 
 
 
-[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.3.0")]
+[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.3.1")]
 public class SullysAutoPinner : BaseUnityPlugin
 {
     private PinSettings _settings;
