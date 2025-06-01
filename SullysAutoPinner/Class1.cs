@@ -296,9 +296,9 @@ public class PinSettings
     public bool DragonEgg = true;
     public bool VoltureEgg = true;
     public bool SmokePuffs = false;
-    public bool MageCaps = false;
+    public bool MageCaps = true;
     public bool YPCones = true;
-    public bool JotunnPuffs = false;
+    public bool JotunPuffs = true;
     public bool Iron = true;
     public bool Mudpile = true;
     public bool Abomination = true;
@@ -599,7 +599,7 @@ public class PinScanner
         { "turnip", ("Seeds", Minimap.PinType.Icon3) },
         { "magecap", ("MageCaps", Minimap.PinType.Icon3) },
         { "y-pcone", ("YPCones", Minimap.PinType.Icon3) },
-        { "j-puff", ("JotunnPuffs", Minimap.PinType.Icon3) },
+        { "j-puff", ("JotunPuffs", Minimap.PinType.Icon3) },
         { "v-egg", ("VoltureEgg", Minimap.PinType.Icon3) },
         { "dragonegg", ("DragonEgg", Minimap.PinType.Icon3) },
         { "smokepuff", ("SmokePuffs", Minimap.PinType.Icon3) },
@@ -607,7 +607,7 @@ public class PinScanner
         { "dwarfspawner", ("DwarfSpawner", Minimap.PinType.Icon2) },
         { "draugrspawner", ("DraugrSpawner", Minimap.PinType.Icon2) },
         { "totem", ("Totem", Minimap.PinType.Icon2) },
-        { "fire", ("Fire", Minimap.PinType.Icon0) },
+        { "campfire", ("Fire", Minimap.PinType.Icon0) },
         { "tar", ("Tar", Minimap.PinType.Icon2) },
         { "skel", ("Skeleton", Minimap.PinType.Icon3) },
         { "treasure", ("Treasure", Minimap.PinType.Icon3) },
