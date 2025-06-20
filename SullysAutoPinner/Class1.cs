@@ -1,6 +1,9 @@
-﻿// SullysAutoPinner v1.3.1
+﻿// SullysAutoPinner v1.3.2
 // 
-// added configurable JSON Language Localization
+// Correcting some problems with language
+// added LanguageCode to defaultConfigFile
+// added LanguageCode to Append Missing Options
+// fixed the code to use the actual LanguageCode
 // 
 
 using System;
@@ -16,7 +19,7 @@ using static PinScanner;
 
 
 
-[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.3.1")]
+[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.3.2")]
 public class SullysAutoPinner : BaseUnityPlugin
 {
     private PinSettings _settings;
@@ -199,6 +202,7 @@ public class ConfigLoader
             case "scaninterval": if (float.TryParse(value, out num)) settings.ScanInterval = num; break;
             case "saveinterval": if (float.TryParse(value, out num)) settings.SaveInterval = num; break;
             case "pinmergedistance": if (float.TryParse(value, out num)) settings.PinMergeDistance = num; break;
+            case "languagecode": settings.LanguageCode = value; break;
             default:
                 var field = typeof(PinSettings).GetFields().FirstOrDefault(f => f.Name.Equals(key, StringComparison.OrdinalIgnoreCase));
                 if (field != null && field.FieldType == typeof(bool))
@@ -220,8 +224,22 @@ public class ConfigLoader
                     var field = typeof(PinSettings)
                         .GetFields()
                         .First(f => f.Name.Equals(key, StringComparison.InvariantCultureIgnoreCase));
-                    bool val = (bool)field.GetValue(settings);
-                    w.WriteLine($"{key}={val.ToString().ToLowerInvariant()}");
+
+                    if (field.FieldType == typeof(bool))
+                    {
+                        bool val = (bool)field.GetValue(settings);
+                        w.WriteLine($"{key}={val.ToString().ToLowerInvariant()}");
+                    }
+                    else if (field.FieldType == typeof(string))
+                    {
+                        string val = (string)field.GetValue(settings);
+                        w.WriteLine($"{key}={val.ToLowerInvariant()}");
+                    }
+                    else if (field.FieldType == typeof(float))
+                    {
+                        float val = (float)field.GetValue(settings);
+                        w.WriteLine($"{key}={val.ToString(CultureInfo.InvariantCulture)}");
+                    }
                 }
             }
             _logger.LogWarning("Appended missing config keys to: " + ConfigFilePath);
@@ -239,6 +257,7 @@ public class ConfigLoader
             using (StreamWriter writer = new StreamWriter(ConfigFilePath))
             {
                 writer.WriteLine("# SullysAutoPinner config");
+                writer.WriteLine("languagecode=" + settings.LanguageCode.ToLowerInvariant());
                 writer.WriteLine("scanradius=" + settings.ScanRadius);
                 writer.WriteLine("scaninterval=" + settings.ScanInterval);
                 writer.WriteLine("saveinterval=" + settings.SaveInterval);
