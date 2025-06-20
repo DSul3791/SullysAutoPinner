@@ -7,13 +7,15 @@ using UnityEngine;
 using BepInEx;
 using BepInEx.Logging;
 using HarmonyLib;
+using SullysAutoPinner;
+using BepInEx.Configuration;
 
 public class PinManager
 {
     private const int PinFlushThreshold = 50;
 
     private readonly HashSet<string> _pinHashes = new HashSet<string>();
-    private readonly PinSettings _settings;
+    private readonly ModConfig _config;
     private readonly ManualLogSource _logger;
     private readonly LocalizationManager _localizationManager;
     private readonly List<Tuple<Vector3, string>> _currentPins = new List<Tuple<Vector3, string>>();
@@ -24,9 +26,9 @@ public class PinManager
     private static readonly string SaveFolder = Path.Combine(Paths.ConfigPath, "SullysAutoPinnerFiles");
     private static readonly string PinsFilePath = Path.Combine(SaveFolder, "Pins.txt");
 
-    public PinManager(PinSettings settings, ManualLogSource logger, LocalizationManager localizationManager)
+    public PinManager(ModConfig config, ManualLogSource logger, LocalizationManager localizationManager)
     {
-        _settings = settings;
+        _config = config;
         _logger = logger;
         _localizationManager = localizationManager;
         Directory.CreateDirectory(Path.GetDirectoryName(PinsFilePath));
@@ -45,7 +47,7 @@ public class PinManager
 
         foreach (var existing in _currentPins)
         {
-            if (Vector3.Distance(existing.Item1, roundedPos) < _settings.PinMergeDistance &&
+            if (Vector3.Distance(existing.Item1, roundedPos) < _config.PinMergeDistance.Value &&
                 string.Equals(existing.Item2, labelUpper, StringComparison.OrdinalIgnoreCase))
                 return;
         }
@@ -57,7 +59,7 @@ public class PinManager
         _currentPins.Add(new Tuple<Vector3, string>(roundedPos, labelUpper));
         _pinHashes.Add(hash);
 
-        if (_settings.EnablePinSaving && _newPins.Count >= PinFlushThreshold)
+        if (_config.EnablePinSaving.Value && _newPins.Count >= PinFlushThreshold)
         {
             SavePinsToFile();
         }
@@ -65,9 +67,9 @@ public class PinManager
 
     public void TryPeriodicSave()
     {
-        if (!_settings.EnablePinSaving || _newPins.Count == 0) return;
+        if (!_config.EnablePinSaving.Value || _newPins.Count == 0) return;
 
-        if (_newPins.Count >= PinFlushThreshold || Time.time - _lastSaveTime > _settings.SaveInterval)
+        if (_newPins.Count >= PinFlushThreshold || Time.time - _lastSaveTime > _config.SaveInterval.Value)
         {
             SavePinsToFile();
         }
@@ -75,7 +77,7 @@ public class PinManager
 
     public void SaveImmediate()
     {
-        if (_settings.EnablePinSaving)
+        if (_config.EnablePinSaving.Value)
         {
             SavePinsToFile();
         }
@@ -112,7 +114,7 @@ public class PinManager
         _logger.LogWarning($"SullysAutoPinner >>> All Map Pins Removed: {allPins.Count} pins removed from the map.");
     }
 
-    public void RemoveUnwantedPins(PinSettings settings)
+    public void RemoveUnwantedPins(ModConfig config)
     {
         if (Minimap.instance == null) return;
 
@@ -124,7 +126,7 @@ public class PinManager
         foreach (var pin in allPins)
         {
             string label = pin.m_name.ToUpperInvariant();
-            if (!IsLabelEnabled(label, settings))
+            if (!IsLabelEnabled(label, config))
             {
                 toRemove.Add(pin);
             }
@@ -138,16 +140,17 @@ public class PinManager
         _logger.LogWarning($"Removed {toRemove.Count} unwanted pins from the map.");
     }
 
-    private bool IsLabelEnabled(string label, PinSettings settings)
+    private bool IsLabelEnabled(string label, ModConfig config)
     {
         if (!PinScanner.PinLabelMap.LabelToSettingInfo.TryGetValue(label, out var settingInfo))
             return true;
 
-        var field = typeof(PinSettings).GetField(settingInfo.SettingKey);
-        if (field == null || field.FieldType != typeof(bool))
+        var field = typeof(ModConfig).GetField(settingInfo.SettingKey);
+        if (field == null || field.FieldType != typeof(ConfigEntry<bool>))
             return true;
 
-        return (bool)field.GetValue(settings);
+        var entry = (ConfigEntry<bool>)field.GetValue(config);
+        return entry.Value;
     }
 
     private void SavePinsToFile()

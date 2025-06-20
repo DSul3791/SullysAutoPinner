@@ -72,7 +72,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Class1.cs" />
+    <Compile Include="SullysAutoPinner.cs" />
+    <Compile Include="ModConfig.cs" />
     <Compile Include="LocalizationManager.cs" />
     <Compile Include="PinManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
