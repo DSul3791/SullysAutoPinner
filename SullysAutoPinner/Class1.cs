@@ -1,9 +1,9 @@
-﻿// SullysAutoPinner v1.3.2
+﻿// SullysAutoPinner v1.3.3
 // 
-// Correcting some problems with language
-// added LanguageCode to defaultConfigFile
-// added LanguageCode to Append Missing Options
-// fixed the code to use the actual LanguageCode
+// Code Version alignment. 
+// Not sure why this version wasn't in line but now it is.
+// No actual changes.
+// 
 // 
 
 using System;
@@ -19,7 +19,7 @@ using static PinScanner;
 
 
 
-[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.3.2")]
+[BepInPlugin("sullys.autopinner", "Sullys Auto Pinner", "1.3.3")]
 public class SullysAutoPinner : BaseUnityPlugin
 {
     private PinSettings _settings;
