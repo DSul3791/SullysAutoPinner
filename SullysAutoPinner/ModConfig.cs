@@ -1,4 +1,6 @@
-﻿using BepInEx.Configuration;
+﻿// Updated ModConfig.cs for SullysAutoPinner v1.4.0
+
+using BepInEx.Configuration;
 using BepInEx.Logging;
 
 namespace SullysAutoPinner
@@ -23,40 +25,57 @@ namespace SullysAutoPinner
 
         // Detection toggles
         public ConfigEntry<bool> ShowUnmappedPrefabs;
-        public ConfigEntry<bool> Mushrooms;
-        public ConfigEntry<bool> RaspBerries;
+
+        // Pin toggles
+        public ConfigEntry<bool> Abomination;
+        public ConfigEntry<bool> AshlandPotGreen;
+        public ConfigEntry<bool> AshlandPotRed;
+        public ConfigEntry<bool> Barley;
         public ConfigEntry<bool> BlueBerries;
-        public ConfigEntry<bool> Seeds;
-        public ConfigEntry<bool> Thistle;
+        public ConfigEntry<bool> BonemawSerpent;
         public ConfigEntry<bool> CloudBerries;
         public ConfigEntry<bool> Copper;
-        public ConfigEntry<bool> Tin;
-        public ConfigEntry<bool> Skeleton;
-        public ConfigEntry<bool> DwarfSpawner;
-        public ConfigEntry<bool> TrollCave;
         public ConfigEntry<bool> Crypt;
-        public ConfigEntry<bool> Totem;
-        public ConfigEntry<bool> Fire;
-        public ConfigEntry<bool> DraugrSpawner;
-        public ConfigEntry<bool> Treasure;
-        public ConfigEntry<bool> Barley;
-        public ConfigEntry<bool> Flax;
-        public ConfigEntry<bool> Tar;
         public ConfigEntry<bool> DragonEgg;
-        public ConfigEntry<bool> VoltureEgg;
-        public ConfigEntry<bool> SmokePuffs;
-        public ConfigEntry<bool> MageCaps;
-        public ConfigEntry<bool> YPCones;
-        public ConfigEntry<bool> JotunPuffs;
+        public ConfigEntry<bool> DraugrSpawner;
+        public ConfigEntry<bool> DvergerThings;
+        public ConfigEntry<bool> DwarfSpawner;
+        public ConfigEntry<bool> Excavation;
+        public ConfigEntry<bool> Fire;
+        public ConfigEntry<bool> Flax;
+        public ConfigEntry<bool> GiantBrain;
+        public ConfigEntry<bool> GiantRibs;
+        public ConfigEntry<bool> GiantSkull;
+        public ConfigEntry<bool> GiantSword;
         public ConfigEntry<bool> Iron;
-        public ConfigEntry<bool> Mudpile;
-        public ConfigEntry<bool> Abomination;
+        public ConfigEntry<bool> JotunPuffs;
+        public ConfigEntry<bool> Lantern;
+        public ConfigEntry<bool> MageCaps;
+        public ConfigEntry<bool> Marker;
         public ConfigEntry<bool> Meteorite;
-        public ConfigEntry<bool> Obsidian;
-        public ConfigEntry<bool> Silver;
         public ConfigEntry<bool> MistlandsGiants;
         public ConfigEntry<bool> MistlandsSwords;
-        public ConfigEntry<bool> DvergerThings;
+        public ConfigEntry<bool> Mudpile;
+        public ConfigEntry<bool> Mushrooms;
+        public ConfigEntry<bool> Obsidian;
+        public ConfigEntry<bool> Onion;
+        public ConfigEntry<bool> PickableSmokePuff;
+        public ConfigEntry<bool> RaspBerries;
+        public ConfigEntry<bool> Seeds;
+        public ConfigEntry<bool> SeekerBrute;
+        public ConfigEntry<bool> ShipwreckChest;
+        public ConfigEntry<bool> Silver;
+        public ConfigEntry<bool> Skeleton;
+        public ConfigEntry<bool> SmokePuffs;
+        public ConfigEntry<bool> Tar;
+        public ConfigEntry<bool> Thistle;
+        public ConfigEntry<bool> Tin;
+        public ConfigEntry<bool> Totem;
+        public ConfigEntry<bool> Treasure;
+        public ConfigEntry<bool> TrollCave;
+        public ConfigEntry<bool> Turnip;
+        public ConfigEntry<bool> VoltureEgg;
+        public ConfigEntry<bool> YPCones;
 
         public ModConfig(ConfigFile config, ManualLogSource logger)
         {
@@ -79,7 +98,7 @@ namespace SullysAutoPinner
             // Behavior
             ShowUnmappedPrefabs = config.Bind("Fallback", "ShowUnmappedPrefabs", false, "Create pins for unknown prefabs using prefab name.");
 
-            // Pin toggles
+            // Pins
             Mushrooms = config.Bind("Pins", "Mushrooms", false, "");
             RaspBerries = config.Bind("Pins", "RaspBerries", false, "");
             BlueBerries = config.Bind("Pins", "BlueBerries", false, "");
@@ -114,6 +133,18 @@ namespace SullysAutoPinner
             MistlandsGiants = config.Bind("Pins", "MistlandsGiants", true, "");
             MistlandsSwords = config.Bind("Pins", "MistlandsSwords", true, "");
             DvergerThings = config.Bind("Pins", "DvergerThings", true, "");
+            BonemawSerpent = config.Bind("Pins", "BonemawSerpent", true, "");
+            GiantSword = config.Bind("Pins", "GiantSword", true, "");
+            GiantRibs = config.Bind("Pins", "GiantRibs", true, "");
+            GiantSkull = config.Bind("Pins", "GiantSkull", true, "");
+            GiantBrain = config.Bind("Pins", "GiantBrain", true, "");
+            Lantern = config.Bind("Pins", "Lantern", true, "");
+            Excavation = config.Bind("Pins", "Excavation", true, "");
+            AshlandPotGreen = config.Bind("Pins", "AshlandPotGreen", true, "");
+            AshlandPotRed = config.Bind("Pins", "AshlandPotRed", true, "");
+            ShipwreckChest = config.Bind("Pins", "ShipwreckChest", true, "");
+            SeekerBrute = config.Bind("Pins", "SeekerBrute", true, "");
+            Marker = config.Bind("Pins", "Marker", true, "");
         }
     }
 }
