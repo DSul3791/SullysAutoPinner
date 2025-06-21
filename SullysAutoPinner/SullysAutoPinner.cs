@@ -15,6 +15,7 @@ using BepInEx;
 using HarmonyLib;
 using static SullysAutoPinner.PinScanner;
 using BepInEx.Configuration;
+using System.Reflection;
 
 namespace SullysAutoPinner { 
 
@@ -24,17 +25,25 @@ public class SullysAutoPinner : BaseUnityPlugin
 
     private PinManager _pinManager;
     private ModConfig _config;
+
     
     private PinScanner _scanner;
     private PrefabTracker _prefabTracker;
     private float _lastScanTime;
 
     private LocalizationManager _localizationManager; // <-- add this at class level if not already
+    private ConfigWatcher _configWatcher;
 
-    private void Awake()
+
+        private void Awake()
     {
 
-            _config = new ModConfig(this);
+            //_config = new ModConfig(this);
+            _config = new ModConfig(Config, Logger);
+
+            string configPath = Path.Combine(Paths.ConfigPath, "sullys.autopinner.cfg");
+
+            _configWatcher = new ConfigWatcher(configPath, OnConfigReloaded, Logger);
 
 
             // Ensure translation files are present and load the selected language
@@ -50,8 +59,31 @@ public class SullysAutoPinner : BaseUnityPlugin
             Logger.LogWarning("SullysAutoPinner Initialized");
     }
 
+        private void OnConfigReloaded()
+        {
+            Logger.LogWarning("[SullysAutoPinner] Reloading config from file...");
 
-    private void Update()
+            Config.Reload();
+
+            _localizationManager.Reload(_config.PreferredLanguage.Value);
+            _pinManager.ReloadConfig(); // if needed
+
+            if (_config.ClearAllUnwantedPins.Value)
+            {
+                Logger.LogWarning("[SullysAutoPinner] Remove Unwanted Pins Triggered");
+                _pinManager.RemoveUnwantedPins(_config);
+                _config.ClearAllUnwantedPins.Value = false;
+            }
+            if (_config.ClearAllMapPinsAndHistory.Value)
+            {
+                Logger.LogWarning("[SullysAutoPinner] Remove All Pins and History Triggered");
+                _pinManager.RemoveAllPins();
+                _config.ClearAllMapPinsAndHistory.Value = false;
+            }
+
+        }
+
+        private void Update()
     {
         if (Player.m_localPlayer == null) return;
 
@@ -71,240 +103,6 @@ public class SullysAutoPinner : BaseUnityPlugin
         _prefabTracker.SaveImmediate();
     }
 }
-
-public class ConfigLoader
-{
-    private static readonly string SaveFolder = Path.Combine(Paths.ConfigPath, "SullysAutoPinnerFiles");
-    private static readonly string ConfigFilePath = Path.Combine(SaveFolder, "SullysAutoPinner.cfg");
-
-    private readonly BepInEx.Logging.ManualLogSource _logger;
-    private FileSystemWatcher _watcher;
-    private System.Threading.Timer _debounceTimer;
-    private Action _onReload;
-
-    public ConfigLoader(BepInEx.Logging.ManualLogSource logger)
-    {
-        _logger = logger;
-        Directory.CreateDirectory(SaveFolder);
-    }
-
-    public void EnableHotReload(Action onReload)
-    {
-        _onReload = onReload;
-        _watcher = new FileSystemWatcher(SaveFolder, "SullysAutoPinner.cfg")
-        {
-            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
-        };
-        _watcher.Changed += OnConfigChanged;
-        _watcher.Renamed += OnConfigChanged;
-        _watcher.EnableRaisingEvents = true;
-        _logger.LogWarning("[ConfigLoader] Hot config reload enabled.");
-    }
-
-    private void OnConfigChanged(object sender, FileSystemEventArgs e)
-    {
-        _debounceTimer?.Dispose();
-        _debounceTimer = new System.Threading.Timer(_ =>
-        {
-            try
-            {
-                _logger.LogWarning("[ConfigLoader] Config file updated — reloading.");
-                _onReload?.Invoke();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("[ConfigLoader] Reload failed: " + ex.Message);
-            }
-        }, null, 200, Timeout.Infinite);
-    }
-
-    public PinSettings Load()
-    {
-        var settings = new PinSettings();
-        var existing = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
-
-        if (File.Exists(ConfigFilePath))
-        {
-            foreach (var line in File.ReadAllLines(ConfigFilePath))
-            {
-                var t = line.Trim();
-                if (t.StartsWith("#") || !t.Contains("=")) continue;
-                var parts = t.Split(new[] { '=' }, 2);
-                existing[parts[0].Trim().ToLowerInvariant()] = parts[1].Trim().ToLowerInvariant();
-            }
-
-            foreach (var kv in existing)
-                ApplyKeyValue(settings, kv.Key, kv.Value);
-
-            var allBoolKeys = typeof(PinSettings)
-                .GetFields()
-                .Where(f => f.FieldType == typeof(bool))
-                .Select(f => f.Name.ToLowerInvariant())
-                .ToHashSet();
-
-            var missing = allBoolKeys.Except(existing.Keys).ToList();
-
-            var oneTimeFlags = new[] {
-                "clearallmappinsandhistory",
-                "clearallunwantedpins"
-            };
-
-            foreach (var key in oneTimeFlags)
-            {
-                if (!existing.ContainsKey(key) && !missing.Contains(key))
-                    missing.Add(key);
-            }
-
-            if (missing.Any())
-                AppendMissingDefaults(settings, missing);
-        }
-        else
-        {
-            SaveDefault(settings);
-        }
-
-        return settings;
-    }
-
-    private void ApplyKeyValue(PinSettings settings, string key, string value)
-    {
-        bool flag = value.Equals("true", StringComparison.OrdinalIgnoreCase);
-        float num;
-        switch (key)
-        {
-            case "scanradius": if (float.TryParse(value, out num)) settings.ScanRadius = num; break;
-            case "scaninterval": if (float.TryParse(value, out num)) settings.ScanInterval = num; break;
-            case "saveinterval": if (float.TryParse(value, out num)) settings.SaveInterval = num; break;
-            case "pinmergedistance": if (float.TryParse(value, out num)) settings.PinMergeDistance = num; break;
-            case "languagecode": settings.LanguageCode = value; break;
-            default:
-                var field = typeof(PinSettings).GetFields().FirstOrDefault(f => f.Name.Equals(key, StringComparison.OrdinalIgnoreCase));
-                if (field != null && field.FieldType == typeof(bool))
-                {
-                    field.SetValue(settings, flag);
-                }
-                break;
-        }
-    }
-
-    private void AppendMissingDefaults(PinSettings settings, IEnumerable<string> missingKeys)
-    {
-        try
-        {
-            using (var w = File.AppendText(ConfigFilePath))
-            {
-                foreach (var key in missingKeys)
-                {
-                    var field = typeof(PinSettings)
-                        .GetFields()
-                        .First(f => f.Name.Equals(key, StringComparison.InvariantCultureIgnoreCase));
-
-                    if (field.FieldType == typeof(bool))
-                    {
-                        bool val = (bool)field.GetValue(settings);
-                        w.WriteLine($"{key}={val.ToString().ToLowerInvariant()}");
-                    }
-                    else if (field.FieldType == typeof(string))
-                    {
-                        string val = (string)field.GetValue(settings);
-                        w.WriteLine($"{key}={val.ToLowerInvariant()}");
-                    }
-                    else if (field.FieldType == typeof(float))
-                    {
-                        float val = (float)field.GetValue(settings);
-                        w.WriteLine($"{key}={val.ToString(CultureInfo.InvariantCulture)}");
-                    }
-                }
-            }
-            _logger.LogWarning("Appended missing config keys to: " + ConfigFilePath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Error appending missing defaults: " + ex.Message);
-        }
-    }
-
-    public void SaveDefault(PinSettings settings)
-    {
-        try
-        {
-            using (StreamWriter writer = new StreamWriter(ConfigFilePath))
-            {
-                writer.WriteLine("# SullysAutoPinner config");
-                writer.WriteLine("languagecode=" + settings.LanguageCode.ToLowerInvariant());
-                writer.WriteLine("scanradius=" + settings.ScanRadius);
-                writer.WriteLine("scaninterval=" + settings.ScanInterval);
-                writer.WriteLine("saveinterval=" + settings.SaveInterval);
-                writer.WriteLine("pinmergedistance=" + settings.PinMergeDistance);
-
-                foreach (var field in typeof(PinSettings).GetFields())
-                {
-                    if (field.FieldType == typeof(bool))
-                    {
-                        string key = field.Name.ToLowerInvariant();
-                        bool val = (bool)field.GetValue(settings);
-                        writer.WriteLine(key + "=" + val.ToString().ToLowerInvariant());
-                    }
-                }
-            }
-            _logger.LogWarning("Default config created at: " + ConfigFilePath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning("Error saving default config: " + ex.Message);
-        }
-    }
-}
-
-public class PinSettings
-{
-    public string LanguageCode = "en";
-    public bool ClearNearbyFallbackPinsOnNextScan = false;
-    public bool ShowUnmappedPrefabs = false;
-    public float ScanRadius = 300f;
-    public float ScanInterval = 12f;
-    public float SaveInterval = 120f;
-    public float PinMergeDistance = 50f;
-    public bool EnablePinSaving = true;
-    public bool EnablePrefabLogging = false;
-    public bool Mushrooms = false;
-    public bool RaspBerries = false;
-    public bool BlueBerries = false;
-    public bool Seeds = false;
-    public bool Thistle = false;
-    public bool CloudBerries = false;
-    public bool Copper = true;
-    public bool Tin = false;
-    public bool Skeleton = false;
-    public bool DwarfSpawner = true;
-    public bool TrollCave = true;
-    public bool Crypt = true;
-    public bool Totem = true;
-    public bool Fire = true;
-    public bool DraugrSpawner = false;
-    public bool Treasure = false;
-    public bool Barley = false;
-    public bool Flax = false;
-    public bool Tar = true;
-    public bool DragonEgg = true;
-    public bool VoltureEgg = true;
-    public bool SmokePuffs = false;
-    public bool MageCaps = true;
-    public bool YPCones = true;
-    public bool JotunPuffs = true;
-    public bool Iron = true;
-    public bool Mudpile = true;
-    public bool Abomination = true;
-    public bool Meteorite = true;
-    public bool Obsidian = true;
-    public bool Silver = true;
-    public bool MistlandsGiants = true;
-    public bool MistlandsSwords = true;
-    public bool DvergerThings = true;
-    public bool ClearAllMapPinsAndHistory = false;
-    public bool ClearAllUnwantedPins = false;
-}
-
     // --- PrefabTracker ---
     public class PrefabTracker
     {
@@ -514,7 +312,8 @@ public class PinSettings
                     continue;
 
                 string settingKey = kvp.Value.SettingKey;
-                var field = typeof(ModConfig).GetField(settingKey);
+                var field = typeof(ModConfig).GetField(settingKey, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+
                 if (field == null || field.FieldType != typeof(ConfigEntry<bool>)) continue;
 
                 var entry = (ConfigEntry<bool>)field.GetValue(_config);
@@ -562,46 +361,71 @@ public class PinSettings
             public static readonly Dictionary<string, (string SettingKey, Minimap.PinType Icon)> LabelToSettingInfo =
                 new Dictionary<string, (string, Minimap.PinType)>(StringComparer.OrdinalIgnoreCase)
                 {
-                { "abomination", ("Abomination", Minimap.PinType.Icon3) },
-                { "crypt2", ("Crypt", Minimap.PinType.Icon3) },
-                { "crypt3", ("Crypt", Minimap.PinType.Icon3) },
-                { "crypt4", ("Crypt", Minimap.PinType.Icon3) },
-                { "trollcave", ("TrollCave", Minimap.PinType.Icon3) },
-                { "rock4_copper", ("Copper", Minimap.PinType.Icon3) },
-                { "iron_deposit", ("Iron", Minimap.PinType.Icon3) },
-                { "mudpile", ("Mudpile", Minimap.PinType.Icon3) },
-                { "obsidian", ("Obsidian", Minimap.PinType.Icon3) },
-                { "silver", ("Silver", Minimap.PinType.Icon3) },
-                { "meteor", ("Meteorite", Minimap.PinType.Icon3) },
-                { "flax", ("Flax", Minimap.PinType.Icon3) },
-                { "barley", ("Barley", Minimap.PinType.Icon3) },
-                { "blueberry", ("BlueBerries", Minimap.PinType.Icon3) },
-                { "berries", ("RaspBerries", Minimap.PinType.Icon3) },
-                { "shrooms", ("Mushrooms", Minimap.PinType.Icon3) },
-                { "cloud", ("CloudBerries", Minimap.PinType.Icon3) },
-                { "thistle", ("Thistle", Minimap.PinType.Icon3) },
-                { "carrot", ("Seeds", Minimap.PinType.Icon3) },
-                { "onion", ("Seeds", Minimap.PinType.Icon3) },
-                { "turnip", ("Seeds", Minimap.PinType.Icon3) },
-                { "magecap", ("MageCaps", Minimap.PinType.Icon3) },
-                { "y-pcone", ("YPCones", Minimap.PinType.Icon3) },
-                { "j-puff", ("JotunPuffs", Minimap.PinType.Icon3) },
-                { "v-egg", ("VoltureEgg", Minimap.PinType.Icon3) },
-                { "dragonegg", ("DragonEgg", Minimap.PinType.Icon3) },
-                { "smokepuff", ("SmokePuffs", Minimap.PinType.Icon3) },
-                { "thing", ("DvergerThings", Minimap.PinType.Icon3) },
-                { "dwarfspawner", ("DwarfSpawner", Minimap.PinType.Icon2) },
-                { "draugrspawner", ("DraugrSpawner", Minimap.PinType.Icon2) },
-                { "totem", ("Totem", Minimap.PinType.Icon2) },
-                { "campfire", ("Fire", Minimap.PinType.Icon0) },
-                { "tar", ("Tar", Minimap.PinType.Icon2) },
-                { "skel", ("Skeleton", Minimap.PinType.Icon3) },
-                { "treasure", ("Treasure", Minimap.PinType.Icon3) },
-                { "swords", ("MistlandsSwords", Minimap.PinType.Icon3) },
-                { "marker", ("Marker", Minimap.PinType.Icon2) },
-                { "giant", ("MistlandsGiants", Minimap.PinType.Icon3) }
+            // Dungeons and Spawners
+            { "abomination", ("Abomination", Minimap.PinType.Icon3) },
+            { "crypt2", ("Crypt", Minimap.PinType.Icon3) },
+            { "crypt3", ("Crypt", Minimap.PinType.Icon3) },
+            { "crypt4", ("Crypt", Minimap.PinType.Icon3) },
+            { "trollcave", ("TrollCave", Minimap.PinType.Icon3) },
+            { "dwarfspawner", ("DwarfSpawner", Minimap.PinType.Icon2) },
+            { "draugrspawner", ("DraugrSpawner", Minimap.PinType.Icon2) },
+            { "totem", ("Totem", Minimap.PinType.Icon2) },
+            { "skel", ("Skeleton", Minimap.PinType.Icon3) },
+            { "seekerbrute", ("SeekerBrute", Minimap.PinType.Icon3) },
+            { "bonemawserpent", ("BonemawSerpent", Minimap.PinType.Icon3) },
+
+            // Resources
+            { "rock4_copper", ("Copper", Minimap.PinType.Icon3) },
+            { "iron_deposit", ("Iron", Minimap.PinType.Icon3) },
+            { "mudpile", ("Mudpile", Minimap.PinType.Icon3) },
+            { "obsidian", ("Obsidian", Minimap.PinType.Icon3) },
+            { "rock3_silver", ("Silver", Minimap.PinType.Icon3) },
+            { "silvervein", ("Silver", Minimap.PinType.Icon3) },
+            { "meteor", ("Meteorite", Minimap.PinType.Icon3) },
+            { "pickable_tar", ("Tar", Minimap.PinType.Icon2) },
+            { "pickable_flax_wild", ("Flax", Minimap.PinType.Icon3) },
+
+            // Plants & Food
+            { "flax", ("Flax", Minimap.PinType.Icon3) },
+            { "barley", ("Barley", Minimap.PinType.Icon3) },
+            { "blueberry", ("BlueBerries", Minimap.PinType.Icon3) },
+            { "raspberry", ("RaspBerries", Minimap.PinType.Icon3) },
+            { "shroom", ("Mushrooms", Minimap.PinType.Icon3) },
+            { "cloud", ("CloudBerries", Minimap.PinType.Icon3) },
+            { "thistle", ("Thistle", Minimap.PinType.Icon3) },
+            { "carrot", ("Seeds", Minimap.PinType.Icon3) },
+            { "onion", ("Seeds", Minimap.PinType.Icon3) },
+            { "turnip", ("Seeds", Minimap.PinType.Icon3) },
+            { "magecap", ("MageCaps", Minimap.PinType.Icon3) },
+            { "y-pcone", ("YPCones", Minimap.PinType.Icon3) },
+            { "j-puff", ("JotunPuffs", Minimap.PinType.Icon3) },
+            { "v-egg", ("VoltureEgg", Minimap.PinType.Icon3) },
+            { "dragonegg", ("DragonEgg", Minimap.PinType.Icon3) },
+            { "pickable_smokepuff", ("SmokePuffs", Minimap.PinType.Icon3) },
+
+            // Structures / Misc Points of Interest
+            { "thing", ("DvergerThings", Minimap.PinType.Icon3) },
+            { "giant_sword1", ("GiantSword", Minimap.PinType.Icon3) },
+            { "giant_ribs", ("GiantRibs", Minimap.PinType.Icon3) },
+            { "giant_skull", ("GiantSkull", Minimap.PinType.Icon3) },
+            { "giant_brain", ("GiantBrain", Minimap.PinType.Icon3) },
+            { "marker", ("Marker", Minimap.PinType.Icon2) },
+            { "campfire", ("Fire", Minimap.PinType.Icon0) },
+            { "firepit", ("Fire", Minimap.PinType.Icon0) },
+
+            // Loot / Containers
+            { "treasurechest", ("Treasure", Minimap.PinType.Icon3) },
+            { "shipwreck_karve_chest", ("ShipwreckChest", Minimap.PinType.Icon3) },
+
+            // Mistlands & Ashlands Decor
+            { "pickable_dvergrlantern", ("Lantern", Minimap.PinType.Icon3) },
+            { "mistlands_excavation2", ("Excavation", Minimap.PinType.Icon3) },
+            { "ashland_pot1_green", ("AshlandPotGreen", Minimap.PinType.Icon3) },
+            { "ashland_pot2_red", ("AshlandPotRed", Minimap.PinType.Icon3) },
+            { "ashland_pot3_red", ("AshlandPotRed", Minimap.PinType.Icon3) },
                 };
         }
+
     }
 
 }

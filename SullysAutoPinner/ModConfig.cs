@@ -1,10 +1,12 @@
-﻿using BepInEx;
-using BepInEx.Configuration;
+﻿using BepInEx.Configuration;
+using BepInEx.Logging;
 
 namespace SullysAutoPinner
 {
     public class ModConfig
     {
+        private readonly ManualLogSource _logger;
+
         // Core
         public ConfigEntry<string> PreferredLanguage;
         public ConfigEntry<float> ScanRadius;
@@ -56,11 +58,11 @@ namespace SullysAutoPinner
         public ConfigEntry<bool> MistlandsSwords;
         public ConfigEntry<bool> DvergerThings;
 
-        public ModConfig(BaseUnityPlugin plugin)
+        public ModConfig(ConfigFile config, ManualLogSource logger)
         {
-            var config = plugin.Config;
+            _logger = logger;
 
-            // Core settings
+            // Core
             PreferredLanguage = config.Bind("Localization", "LanguageCode", "en", "Language code for localization (en, fr, ru, etc).");
             ScanRadius = config.Bind("Scanning", "ScanRadius", 300f, "Radius (in meters) to scan for prefabs.");
             ScanInterval = config.Bind("Scanning", "ScanInterval", 12f, "Time (in seconds) between environment scans.");

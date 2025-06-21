@@ -34,6 +34,11 @@ public class PinManager
         Directory.CreateDirectory(Path.GetDirectoryName(PinsFilePath));
         LoadPinsFromFile();
     }
+    public void ReloadConfig()
+    {
+        // Reapply any config-driven behavior here if needed
+        // Currently empty — included for future support
+    }
 
     public void TryAddPin(Vector3 pos, string label, Minimap.PinType icon)
     {
@@ -121,12 +126,29 @@ public class PinManager
         var allPins = AccessTools.Field(typeof(Minimap), "m_pins").GetValue(Minimap.instance) as List<Minimap.PinData>;
         if (allPins == null) return;
 
+        // Step 1: Build a set of all valid localized labels based on enabled config entries
+        var validLabels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var kvp in PinScanner.PinLabelMap.LabelToSettingInfo)
+        {
+            string configKey = kvp.Value.SettingKey;
+            var field = typeof(ModConfig).GetField(configKey);
+            if (field == null || field.FieldType != typeof(ConfigEntry<bool>)) continue;
+
+            var entry = (ConfigEntry<bool>)field.GetValue(config);
+            if (entry != null && entry.Value)
+            {
+                string localizedLabel = _localizationManager.GetLabel(configKey.ToUpperInvariant());
+                validLabels.Add(localizedLabel);
+            }
+        }
+
+        // Step 2: Remove all pins that don't match the current set of valid labels
         var toRemove = new List<Minimap.PinData>();
 
         foreach (var pin in allPins)
         {
-            string label = pin.m_name.ToUpperInvariant();
-            if (!IsLabelEnabled(label, config))
+            if (!validLabels.Contains(pin.m_name))
             {
                 toRemove.Add(pin);
             }

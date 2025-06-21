@@ -72,6 +72,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ConfigWatcher.cs" />
     <Compile Include="SullysAutoPinner.cs" />
     <Compile Include="ModConfig.cs" />
     <Compile Include="LocalizationManager.cs" />
